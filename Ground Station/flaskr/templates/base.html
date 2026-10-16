@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{% endblock %} - Czar GS</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <link rel='stylesheet' href="{{ url_for('static',filename='css/style.css')}}"></link>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet.marker.slideto@0.2.0/Leaflet.Marker.SlideTo.js"></script>
+</head>
+<body>
+    <header class="app-header">
+        <img src="{{ url_for('static', filename='img/czar.png') }}" alt="Cezar" width="50" height="50">
+        <div class="station-brand">
+            
+            <div class="station-title">
+                <h1>
+                    <span class="station-title-name">CZARSPACE</span>
+                    <span class="station-title-context">GROUND STATION</span>
+                </h1>
+            </div>
+        </div>
+
+        <div class="station-status" aria-label="Estado da estação">
+            <div class="status-block">
+                <span class="status-label">LINK</span>
+                <span class="status-value" id="link-status"><i class="status-dot"></i> STANDBY</span>
+            </div>
+            <div class="status-block">
+                <span class="status-label">LAST PACKET</span>
+                <span class="status-value" id="last-packet-time">--:--:--</span>
+            </div>
+            <div class="status-block">
+                <span class="status-label">DATA RATE</span>
+                <span class="status-value" id="data-rate">0.0 pkt/s</span>
+            </div>
+            <div class="status-block local-clock-block">
+                <span class="status-label">MISSION TIME · LOCAL</span>
+                <span class="status-value" id="local-clock">--:--:--</span>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <button class="action-btn source-mode-btn active-source" id="btn-live" type="button" title="Telemetria ao vivo" aria-label="Telemetria ao vivo">
+                <svg width="16" height="16" aria-hidden="true">
+                    <use href="#icon-live"></use>
+                </svg>
+                <span>LIVE</span>
+            </button>
+            <button class="action-btn source-mode-btn" id="btn-history" type="button" title="Reproduzir histórico" aria-label="Reproduzir histórico">
+                <svg width="16" height="16" aria-hidden="true">
+                    <use href="#icon-history"></use>
+                </svg>
+                <span>REPLAY</span>
+            </button>
+            <div class="dropdown-container">
+                <button id="addWidgetBtn" class="action-btn" type="button" title="Adicionar painel">
+                    <svg width="16" height="16" aria-hidden="true">
+                        <use href="#icon-add-widget"></use>
+                    </svg>
+                    <span>ADD PANEL</span>
+                </button>
+                
+                <div id="widgetDropdown" class="dropdown-menu">
+                    <div class="button" id="testButton">Painel básico</div>
+                    <div class="button" id="rawDataButton">Terminal</div>
+                    <div class="button" id="chartButton">Gráfico</div>
+                    <div class="button" id="mapButton">Radar de Voo</div>
+                </div>
+            </div>
+            <button class="action-btn icon-action" id="saveModeButton" type="button" title="Atualizar modo atual" aria-label="Atualizar modo atual">
+                <svg width="17" height="17" aria-hidden="true"><use href="#save-svg"></use></svg>
+            </button>
+            <button class="action-btn icon-action" id="createModeButton" type="button" title="Adicionar novo modo" aria-label="Adicionar novo modo">
+                <span aria-hidden="true" style="font-size: 1.7rem; line-height: 1; font-weight: 300;">+</span>
+            </button>
+            <button class="action-btn icon-action" id="settingsButton" type="button" title="Configurar modos">
+                <svg width="17" height="17" aria-hidden="true"><use href="#config-svg"></use></svg>
+            </button>
+        </div>
+    </header>
+    <div class="mode-strip">
+        <span class="strip-label">MISSION MODES</span>
+        <div id="modes-tab"></div>
+        <span class="packet-format">RX · TIMESTAMP / MODE / PAYLOAD</span>
+    </div>
+    <div id="history-controls" class="history-controls">
+    <span class="strip-label">REPLAY WINDOW</span>
+    <label>START <input type="datetime-local" id="hist-start"></label>
+    <label>END <input type="datetime-local" id="hist-end"></label>
+    <button id="fetch-history-btn" class="action-btn primary-action">RUN REPLAY</button>
+    <label>SPEED
+        <select id="history-speed">
+            <option value="1">1x</option>
+            <option value="2">2x</option>
+            <option value="5">5x</option>
+            <option value="10">10x</option>
+        </select>
+    </label>
+    <button id="stop-history-btn" class="action-btn stop-action">STOP</button>
+    <span id="history-status" aria-live="polite"></span>
+    <div class="availability-row" id="availability-row">
+        <span class="availability-title">DATA AVAILABILITY</span>
+        <span class="availability-date" id="availability-start">--</span>
+        <div class="availability-track" id="availability-track" aria-label="Faixas com telemetria">
+            <span class="availability-empty">Selecione um modo para consultar</span>
+        </div>
+        <span class="availability-date" id="availability-end">--</span>
+        <button type="button" class="availability-refresh" id="availability-refresh" title="Atualizar disponibilidade">↻</button>
+    </div>
+    </div>
+    <div id="settingsMenu" class="settings-sidebar">
+        <div class="sidebar-header">
+            <div><span class="station-kicker">GROUND CONTROL</span><h2>Mode Registry</h2></div>
+            <button id="closeSettingsBtn" class="close-btn">&times;</button>
+        </div>
+        <div class="sidebar-content">
+           <p class="sidebar-intro">Associe cada código recebido ao layout e à sequência de canais de telemetria.</p>
+            <ul id="settingsModeList" class="mode-list"></ul>
+        </div>
+    </div>
+    <div class="operations-shell">
+        <aside class="ops-rail" aria-label="Indicadores operacionais">
+            <span class="rail-tag">OPS</span>
+            <span class="rail-node active" title="Telemetria">TLM</span>
+            <span class="rail-node" title="Comandos">CMD</span>
+            <span class="rail-line"></span>
+            <span class="rail-foot">GS<br>01</span>
+        </aside>
+        <main><div id="workspace" class="workspace"></div></main>
+    </div>
+
+    <script src="/static/js/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+    
+    <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    <dialog id="inputModal">
+    <div class="modal-body">
+        <span class="station-kicker">CONFIGURATION INPUT</span>
+        <h3 id="inputModalTitle">Digite o valor:</h3>
+        <input type="text" id="inputModalField">
+        <div class="modal-actions">
+            <button id="inputModalCancel">CANCEL</button>
+            <button id="inputModalConfirm">CONFIRM</button>
+        </div>
+    </div>
+    </dialog>
+    <svg style="display: none;">
+        <symbol id="trash-svg" viewBox="0 0 24 24">
+            <path d="M18 6L17.1991 18.0129C17.129 19.065 17.0939 19.5911 16.8667 19.99C16.6666 20.3412 16.3648 20.6235 16.0011 20.7998C15.588 21 15.0607 21 14.0062 21H9.99377C8.93927 21 8.41202 21 7.99889 20.7998C7.63517 20.6235 7.33339 20.3412 7.13332 19.99C6.90607 19.5911 6.871 19.065 6.80086 18.0129L6 6M4 6H20M16 6L15.7294 5.18807C15.4671 4.40125 15.3359 4.00784 15.0927 3.71698C14.8779 3.46013 14.6021 3.26132 14.2905 3.13878C13.9376 3 13.523 3 12.6936 3H11.3064C10.477 3 10.0624 3 9.70951 3.13878C9.39792 3.26132 9.12208 3.46013 8.90729 3.71698C8.66405 4.00784 8.53292 4.40125 8.27064 5.18807L8 6M14 10V17M10 10V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+
+        <symbol id="save-svg" viewBox="0 0 24 24">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M18.1716 1C18.702 1 19.2107 1.21071 19.5858 1.58579L22.4142 4.41421C22.7893 4.78929 23 5.29799 23 5.82843V20C23 21.6569 21.6569 23 20 23H4C2.34315 23 1 21.6569 1 20V4C1 2.34315 2.34315 1 4 1H18.1716ZM4 3C3.44772 3 3 3.44772 3 4V20C3 20.5523 3.44772 21 4 21L5 21L5 15C5 13.3431 6.34315 12 8 12L16 12C17.6569 12 19 13.3431 19 15V21H20C20.5523 21 21 20.5523 21 20V6.82843C21 6.29799 20.7893 5.78929 20.4142 5.41421L18.5858 3.58579C18.2107 3.21071 17.702 3 17.1716 3H17V5C17 6.65685 15.6569 8 14 8H10C8.34315 8 7 6.65685 7 5V3H4ZM17 21V15C17 14.4477 16.5523 14 16 14L8 14C7.44772 14 7 14.4477 7 15L7 21L17 21ZM9 3H15V5C15 5.55228 14.5523 6 14 6H10C9.44772 6 9 5.55228 9 5V3Z" fill="currentColor"/>
+        </symbol>
+
+        <symbol id="config-svg" viewBox="0 0 24 24">
+            <path d="M15 12C15 13.6569 13.6569 15 12 15C10.3431 15 9 13.6569 9 12C9 10.3431 10.3431 9 12 9C13.6569 9 15 10.3431 15 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M12.9046 3.06005C12.6988 3 12.4659 3 12 3C11.5341 3 11.3012 3 11.0954 3.06005C10.7942 3.14794 10.5281 3.32808 10.3346 3.57511C10.2024 3.74388 10.1159 3.96016 9.94291 4.39272C9.69419 5.01452 9.00393 5.33471 8.36857 5.123L7.79779 4.93281C7.3929 4.79785 7.19045 4.73036 6.99196 4.7188C6.70039 4.70181 6.4102 4.77032 6.15701 4.9159C5.98465 5.01501 5.83376 5.16591 5.53197 5.4677C5.21122 5.78845 5.05084 5.94882 4.94896 6.13189C4.79927 6.40084 4.73595 6.70934 4.76759 7.01551C4.78912 7.2239 4.87335 7.43449 5.04182 7.85566C5.30565 8.51523 5.05184 9.26878 4.44272 9.63433L4.16521 9.80087C3.74031 10.0558 3.52786 10.1833 3.37354 10.3588C3.23698 10.5141 3.13401 10.696 3.07109 10.893C3 11.1156 3 11.3658 3 11.8663C3 12.4589 3 12.7551 3.09462 13.0088C3.17823 13.2329 3.31422 13.4337 3.49124 13.5946C3.69158 13.7766 3.96395 13.8856 4.50866 14.1035C5.06534 14.3261 5.35196 14.9441 5.16236 15.5129L4.94721 16.1584C4.79819 16.6054 4.72367 16.829 4.7169 17.0486C4.70875 17.3127 4.77049 17.5742 4.89587 17.8067C5.00015 18.0002 5.16678 18.1668 5.5 18.5C5.83323 18.8332 5.99985 18.9998 6.19325 19.1041C6.4258 19.2295 6.68733 19.2913 6.9514 19.2831C7.17102 19.2763 7.39456 19.2018 7.84164 19.0528L8.36862 18.8771C9.00393 18.6654 9.6942 18.9855 9.94291 19.6073C10.1159 20.0398 10.2024 20.2561 10.3346 20.4249C10.5281 20.6719 10.7942 20.8521 11.0954 20.94C11.3012 21 11.5341 21 12 21C12.4659 21 12.6988 21 12.9046 20.94C13.2058 20.8521 13.4719 20.6719 13.6654 20.4249C13.7976 20.2561 13.8841 20.0398 14.0571 19.6073C14.3058 18.9855 14.9961 18.6654 15.6313 18.8773L16.1579 19.0529C16.605 19.2019 16.8286 19.2764 17.0482 19.2832C17.3123 19.2913 17.5738 19.2296 17.8063 19.1042C17.9997 18.9999 18.1664 18.8333 18.4996 18.5001C18.8328 18.1669 18.9994 18.0002 19.1037 17.8068C19.2291 17.5743 19.2908 17.3127 19.2827 17.0487C19.2759 16.8291 19.2014 16.6055 19.0524 16.1584L18.8374 15.5134C18.6477 14.9444 18.9344 14.3262 19.4913 14.1035C20.036 13.8856 20.3084 13.7766 20.5088 13.5946C20.6858 13.4337 20.8218 13.2329 20.9054 13.0088C21 12.7551 21 12.4589 21 11.8663C21 11.3658 21 11.1156 20.9289 10.893C20.866 10.696 20.763 10.5141 20.6265 10.3588C20.4721 10.1833 20.2597 10.0558 19.8348 9.80087L19.5569 9.63416C18.9478 9.26867 18.6939 8.51514 18.9578 7.85558C19.1262 7.43443 19.2105 7.22383 19.232 7.01543C19.2636 6.70926 19.2003 6.40077 19.0506 6.13181C18.9487 5.94875 18.7884 5.78837 18.4676 5.46762C18.1658 5.16584 18.0149 5.01494 17.8426 4.91583C17.5894 4.77024 17.2992 4.70174 17.0076 4.71872C16.8091 4.73029 16.6067 4.79777 16.2018 4.93273L15.6314 5.12287C14.9961 5.33464 14.3058 5.0145 14.0571 4.39272C13.8841 3.96016 13.7976 3.74388 13.6654 3.57511C13.4719 3.32808 13.2058 3.14794 12.9046 3.06005Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
+        <symbol id="icon-add-widget" viewBox="0 0 24 24" fill="none">
+            <path d="M3 10V18C3 19.1046 3.89543 20 5 20H11M3 10V6C3 4.89543 3.89543 4 5 4H19C20.1046 4 21 4.89543 21 6V10M3 10H21M21 10V13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+            <path d="M17 14V17M17 20V17M17 17H14M17 17H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+            <circle cx="6" cy="7" r="1" fill="currentColor"></circle>
+            <circle cx="9" cy="7" r="1" fill="currentColor"></circle>
+        </symbol>
+        <symbol id="icon-live" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="2" fill="currentColor"></circle>
+            <path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.5 5.5a9.2 9.2 0 0 0 0 13M18.5 5.5a9.2 9.2 0 0 1 0 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+        </symbol>
+        <symbol id="icon-history" viewBox="0 0 24 24" fill="none">
+            <path d="M4 12a8 8 0 1 0 2.34-5.66L4 8.68M4 4v4.68h4.68" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+            <path d="M12 8v4l2.75 1.75" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </symbol>
+    </svg>
+</body>
+</html> 
